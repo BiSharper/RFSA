@@ -7,7 +7,7 @@ pub fn proc_gfs_meta_derive(input: TokenStream) -> TokenStream {
     let meta_type = ast.ident;
 
     return quote::quote! {
-        impl super::rvfs::VMetadata for #meta_type {
+        impl rfsa::VMetadata for #meta_type {
 
         }
     }.into()

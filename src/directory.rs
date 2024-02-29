@@ -9,7 +9,11 @@ pub struct VDirectory<'a, M: VMetadata, F: VFileSystem<M>> {
     marker:     PhantomData<M>
 }
 
+
 pub trait VFileContainer<M: VMetadata, F: VFileSystem<M>> : Sync + Send {
+
+    fn root(&self) -> VPath;
+
     fn file_read(&self, path: &VPath) -> VFSResult<ReadableVFile<M>>;
 
     fn file_write(&mut self, path: &VPath) -> VFSResult<WritableVFile<M>>;
@@ -51,27 +55,31 @@ impl<'a, M: VMetadata, F: VFileSystem<M>> VDirectory<'a, M, F> {
 }
 
 impl<'a, M: VMetadata, F: VFileSystem<M>> VFileContainer<M, F> for VDirectory<'a, M, F> {
+
+    fn root(&self) -> VPath { self.path.clone() }
+
     fn file_read(&self, path: &VPath) -> VFSResult<ReadableVFile<M>> {
-        self.filesystem.file_read(&self.path.join(path))
+        self.filesystem.file_read(&self.root().join_into(path))
     }
 
     fn file_write(&mut self, path: &VPath) -> VFSResult<WritableVFile<M>> {
-        self.filesystem.file_write(&self.path.join(path))
+        self.filesystem.file_write(&self.root().join_into(path))
     }
 
     fn file_create(&mut self, path: &VPath) -> VFSResult<WritableVFile<M>> {
-        self.filesystem.file_create(&self.path.join(path))
+        self.filesystem.file_create(&self.root().join_into(path))
     }
 
-    fn meta_read(&self, path: &VPath) -> VFSResult<ReadableVMetadata<M>>  {
-        self.filesystem.meta_read(&self.path.join(path))
+    fn meta_read(&self, path: &VPath) -> VFSResult<ReadableVMetadata<M>> {
+        self.filesystem.meta_read(&self.root().join_into(path))
     }
 
     fn meta_write(&mut self, path: &VPath) -> VFSResult<WritableVMetadata<M>> {
-        self.filesystem.meta_write(&self.path.join(path))
+        self.filesystem.meta_write(&self.root().join_into(path))
     }
 
     fn dir_iter(&self, path: &VPath, recursive: bool) -> VFSResult<Box<dyn Iterator<Item=&VPath> + Send + '_>> {
-        self.filesystem.path_iter(self.path.join(path).as_directory_string(), recursive)
+        self.filesystem.path_iter(self.root().join_into(path).as_directory_string(), recursive)
     }
+
 }

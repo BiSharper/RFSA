@@ -4,6 +4,8 @@ use std::ops::Deref;
 use std::sync::Arc;
 
 pub const GFS_SEPARATOR: char = '/';
+pub const GFS_ROOT: &'static str = "/";
+
 // pub const ALT_SEPARATOR: char = '\\';
 // const SEPARATORS: [char; 2] = [ALT_SEPARATOR, GFS_SEPARATOR];
 
@@ -50,10 +52,14 @@ pub trait PathLike: Deref<Target = str> + Debug + Sized + Display + Clone + Hash
     fn as_directory_string(&self) -> String { format!("{}{}", self.as_str(), GFS_SEPARATOR) }
 
     fn join<T: AsRef<str>>(&self, other: T) -> Self {
-        Self::create(format!("{}{}", self.as_str(), other.as_ref()))
+        Self::create(format!("{}{}", self.as_str(), other.as_ref()).as_str())
     }
 
-    fn create(path: String) -> Self;
+    fn join_into<T: AsRef<str>>(self, other: T) -> Self {
+        Self::create(format!("{}{}", self, other.as_ref()).as_str())
+    }
+
+    fn create(path: &str) -> Self;
 }
 
 #[derive(Debug, Clone, Hash, Eq, PartialEq, Ord, PartialOrd)]
@@ -61,7 +67,7 @@ pub struct VPath(Arc<str>);
 
 impl From<String> for VPath {
     fn from(value: String) -> Self {
-        Self::create(value)
+        Self::create(value.as_str())
     }
 }
 
@@ -88,7 +94,8 @@ impl PathLike for VPath {
 
     fn to_vpath(self) -> VPath { self }
 
-    fn create(path: String) -> Self { Self { 0: Arc::from(path), } }
+    fn create(path: &str) -> Self { Self { 0: Arc::from(path), } }
+
 }
 
 

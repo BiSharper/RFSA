@@ -12,7 +12,7 @@ use crate::error::VFSResult;
 
 pub const FILESYSTEM_VERSION: &'static str = env!("CARGO_PKG_VERSION");
 
-pub trait VFileSystem<M: VMetadata>: VFileContainer<M, Self> + Sized + Send + Sync + 'static {
+pub trait VFileSystem<M: VMetadata>: Sized + Send + Sync + 'static {
     type VPathIterator<'fs>: Iterator<Item=&'fs VPath> + Send + 'fs;
 
     #[allow(clippy::needless_lifetimes)]
@@ -34,6 +34,14 @@ pub trait VFileSystem<M: VMetadata>: VFileContainer<M, Self> + Sized + Send + Sy
 
     fn file_exists(&self, directory: &VPath) -> VFSResult<bool>;
 
+    fn file_insert(&mut self, path: &VPath, file: VFile<M>) -> VFSResult<Option<VFile<M>>>;
+
+    fn file_mut(&mut self, path: &VPath) -> VFSResult<&mut VFile<M>>;
+
+    fn file_get(&self, path: &VPath) -> VFSResult<&VFile<M>>;
+
+    fn fs_root(&self) -> VPath { VPath::create(GFS_ROOT) }
+
     fn dir_exists(&self, directory: &VPath) -> VFSResult<bool> {
         let directory_prefix = directory.as_directory_string();
         Ok(self.paths()?.find(|p| {
@@ -43,4 +51,33 @@ pub trait VFileSystem<M: VMetadata>: VFileContainer<M, Self> + Sized + Send + Sy
 
     fn dir_remove(&mut self, directory: &VPath) -> VFSResult<Box<[(VPath, VFile<M>)]>>;
 
+}
+
+impl<M: VMetadata, T: VFileSystem<M>> VFileContainer<M, Self> for T {
+    fn root(&self) -> VPath { self.fs_root() }
+
+    fn file_read(&self, path: &VPath) -> VFSResult<ReadableVFile<M>> {
+        Ok(ReadableVFile::new(self.file_get(path)?, 0))
+    }
+
+    fn file_write(&mut self, path: &VPath) -> VFSResult<WritableVFile<M>> {
+        Ok(WritableVFile::new(self.file_mut(path)?))
+    }
+
+    fn file_create(&mut self, path: &VPath) -> VFSResult<WritableVFile<M>> {
+        self.file_insert(path, VFile::create_empty(M::default()))?;
+        Ok(WritableVFile::new(self.file_mut(path)?))
+    }
+
+    fn meta_read(&self, path: &VPath) -> VFSResult<ReadableVMetadata<M>> {
+        Ok(ReadableVMetadata::new(self.file_get(path)?))
+    }
+
+    fn meta_write(&mut self, path: &VPath) -> VFSResult<WritableVMetadata<M>> {
+        Ok(WritableVMetadata::new(self.file_mut(path)?))
+    }
+
+    fn dir_iter(&self, path: &VPath, recursive: bool) -> VFSResult<Box<dyn Iterator<Item=&VPath> + Send + '_>> {
+        self.path_iter(path.as_directory_string(), recursive)
+    }
 }

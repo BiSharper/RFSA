@@ -9,20 +9,20 @@ pub struct VDirectory<'a, M: VMetadata, F: VFileSystem<M>> {
     marker:     PhantomData<M>
 }
 
-pub struct VDirectoryIterator<M: VMetadata, F: VFileSystem<M>> {
-    inner:      F::VPathIterator,
+pub struct VDirectoryIterator<'a, M: VMetadata, F: VFileSystem<M>> {
+    inner:      F::VPathIterator<'a>,
     recursive:  bool,
     prefix:     String,
 }
 
-impl<M: VMetadata, F: VFileSystem<M>> VDirectoryIterator<M, F> {
-    pub fn create(inner: F::VPathIterator, prefix: String, recursive: bool) -> Self {
+impl<'a, M: VMetadata, F: VFileSystem<M>> VDirectoryIterator<'a, M, F> {
+    pub fn create(inner: F::VPathIterator<'a>, prefix: String, recursive: bool) -> Self {
         Self { inner, recursive, prefix }
     }
 }
 
-impl<M: VMetadata, F: VFileSystem<M>> Iterator for VDirectoryIterator<M, F> {
-    type Item = VPath;
+impl<'a, M: VMetadata, F: VFileSystem<M>> Iterator for VDirectoryIterator<'a, M, F> {
+    type Item = &'a VPath;
 
     fn next(&mut self) -> Option<Self::Item> { match self.inner.next() {
         Some(candidate) if candidate.starts_with(&self.prefix) && (

@@ -13,9 +13,9 @@ use crate::error::VFSResult;
 pub const FILESYSTEM_VERSION: &'static str = env!("CARGO_PKG_VERSION");
 
 pub trait VFileSystem<M: VMetadata>: Sized + Send + Sync + 'static {
-    type VPathIterator: Iterator<Item=VPath> + Send;
+    type VPathIterator<'a>: Iterator<Item=&'a VPath> + Send;
 
-    fn root_iter(&self) -> VFSResult<Self::VPathIterator>;
+    fn root_iter(&self) -> VFSResult<Self::VPathIterator<'_>>;
 
     fn path_iter(&self, path_prefix: String, recursive: bool) -> VFSResult<VDirectoryIterator<M, Self>> {
         Ok(VDirectoryIterator::create(self.root_iter()?, path_prefix, recursive))

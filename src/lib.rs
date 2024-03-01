@@ -3,36 +3,27 @@ pub extern crate rfsa_macros as macros;
 
 pub mod error;
 mod path;
+
 pub use path::*;
 mod metadata; pub use metadata::*;
 mod file; pub use file::*;
 mod directory; pub use directory::*;
 use crate::error::VFSResult;
 
-
 pub const FILESYSTEM_VERSION: &'static str = env!("CARGO_PKG_VERSION");
 
 pub trait VFileSystem<M: VMetadata>: Sized + Send + Sync + 'static {
-    type VPathIterator<'fs>: Iterator<Item=&'fs VPath> + Send + 'fs;
+    type VPathIterator: Iterator<Item=VPath> + Send;
 
-    #[allow(clippy::needless_lifetimes)]
-    fn paths<'fs>(&'fs self) -> VFSResult<Self::VPathIterator<'fs>>;
+    fn root_iter(&self) -> VFSResult<Self::VPathIterator>;
 
-    fn path_iter(&self,
-                 path_prefix: String,
-                 recursive: bool
-    ) -> VFSResult<Box<dyn Iterator<Item = &VPath> + Send + '_>> {
-        let prefix_len = path_prefix.len();
-
-        Ok(Box::new(self.paths()?.filter(move |candidate: &&VPath| {
-            candidate.starts_with(path_prefix.as_str()) &&
-                (!recursive || !candidate[prefix_len..].contains(GFS_SEPARATOR))
-        })))
+    fn path_iter(&self, path_prefix: String, recursive: bool) -> VFSResult<VDirectoryIterator<M, Self>> {
+        Ok(VDirectoryIterator::create(self.root_iter()?, path_prefix, recursive))
     }
 
-    fn file_remove(&mut self, path: &VPath) -> VFSResult<VFile<M>>;
+    fn file_remove(&mut self, path: &VPath) -> VFSResult<(VPath, VFile<M>)>;
 
-    fn file_exists(&self, directory: &VPath) -> VFSResult<bool>;
+    fn file_exists(&self, path: &VPath) -> VFSResult<bool>;
 
     fn file_insert(&mut self, path: &VPath, file: VFile<M>) -> VFSResult<Option<VFile<M>>>;
 
@@ -42,15 +33,12 @@ pub trait VFileSystem<M: VMetadata>: Sized + Send + Sync + 'static {
 
     fn fs_root(&self) -> VPath { VPath::create(GFS_ROOT) }
 
-    fn dir_exists(&self, directory: &VPath) -> VFSResult<bool> {
-        let directory_prefix = directory.as_directory_string();
-        Ok(self.paths()?.find(|p| {
+    fn dir_exists(&self, path: &VPath) -> VFSResult<bool> {
+        let directory_prefix = path.as_directory_string();
+        Ok(self.root_iter()?.find(|p| {
             p.starts_with(&directory_prefix)
         }) != None)
     }
-
-    fn dir_remove(&mut self, directory: &VPath) -> VFSResult<Box<[(VPath, VFile<M>)]>>;
-
 }
 
 impl<M: VMetadata, T: VFileSystem<M>> VFileContainer<M, Self> for T {
@@ -77,7 +65,7 @@ impl<M: VMetadata, T: VFileSystem<M>> VFileContainer<M, Self> for T {
         Ok(WritableVMetadata::new(self.file_mut(path)?))
     }
 
-    fn dir_iter(&self, path: &VPath, recursive: bool) -> VFSResult<Box<dyn Iterator<Item=&VPath> + Send + '_>> {
+    fn dir_iter(&self, path: &VPath, recursive: bool) -> VFSResult<VDirectoryIterator<M, Self>> {
         self.path_iter(path.as_directory_string(), recursive)
     }
 }

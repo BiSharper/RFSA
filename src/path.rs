@@ -41,11 +41,15 @@ pub trait PathLike: Deref<Target = str> + Debug + Sized + Display + Clone + Hash
         }
     }
 
+
+
     fn parent_directory_string(&self) -> Option<String> {
         self.rfind('/')
             .map(|idx| Some(self[..idx].to_string()))
             .unwrap_or_else(|| None)
     }
+
+    fn directory_str_len(&self) -> usize { self.len() + 1 }
 
     fn to_vpath(self) -> VPath;
 

@@ -1,5 +1,5 @@
 use std::marker::PhantomData;
-use crate::{ReadableVFile, ReadableVMetadata, VFile, VFileSystem, VMetadata, WritableVFile, WritableVMetadata};
+use crate::{GFS_SEPARATOR, ReadableVFile, ReadableVMetadata, VFile, VFileSystem, VMetadata, WritableVFile, WritableVMetadata};
 use crate::error::VFSResult;
 use crate::path::{PathLike, VPath};
 
@@ -9,6 +9,29 @@ pub struct VDirectory<'a, M: VMetadata, F: VFileSystem<M>> {
     marker:     PhantomData<M>
 }
 
+pub struct VDirectoryIterator<M: VMetadata, F: VFileSystem<M>> {
+    inner:      F::VPathIterator,
+    recursive:  bool,
+    prefix:     String,
+}
+
+impl<M: VMetadata, F: VFileSystem<M>> VDirectoryIterator<M, F> {
+    pub fn create(inner: F::VPathIterator, prefix: String, recursive: bool) -> Self {
+        Self { inner, recursive, prefix }
+    }
+}
+
+impl<M: VMetadata, F: VFileSystem<M>> Iterator for VDirectoryIterator<M, F> {
+    type Item = VPath;
+
+    fn next(&mut self) -> Option<Self::Item> { match self.inner.next() {
+        Some(candidate) if candidate.starts_with(&self.prefix) && (
+            !self.recursive ||
+            !candidate[self.prefix.len()..].contains(GFS_SEPARATOR)
+        ) => Some(candidate),
+        _ => None
+    } }
+}
 
 pub trait VFileContainer<M: VMetadata, F: VFileSystem<M>> : Sync + Send {
 
@@ -24,20 +47,16 @@ pub trait VFileContainer<M: VMetadata, F: VFileSystem<M>> : Sync + Send {
 
     fn meta_write(&mut self, path: &VPath) -> VFSResult<WritableVMetadata<M>>;
 
-    fn dir_iter(&self, path: &VPath, recursive: bool) -> VFSResult<Box<dyn Iterator<Item=&VPath> + Send + '_>>;
+    fn dir_iter(&self, path: &VPath, recursive: bool) -> VFSResult<VDirectoryIterator<M, F>>;
 }
 
 impl<'a, M: VMetadata, F: VFileSystem<M>> VDirectory<'a, M, F> {
     pub fn create(filesystem: &'a mut F, path: VPath) -> VDirectory<'a, M, F> {
-        Self {
-            filesystem,
-            path,
-            marker: PhantomData,
-        }
+        Self { filesystem, path, marker: PhantomData, }
     }
 }
 impl<'a, M: VMetadata, F: VFileSystem<M>> VDirectory<'a, M, F> {
-    pub fn file_remove(&mut self, path: &VPath) -> VFSResult<VFile<M>> {
+    pub fn file_remove(&mut self, path: &VPath) -> VFSResult<(VPath, VFile<M>)> {
         self.filesystem.file_remove(&self.path.join(path))
     }
 
@@ -47,10 +66,6 @@ impl<'a, M: VMetadata, F: VFileSystem<M>> VDirectory<'a, M, F> {
 
     pub fn dir_exists(&self, path: &VPath) -> VFSResult<bool> {
         self.filesystem.dir_exists(&self.path.join(path))
-    }
-
-    pub fn dir_remove(&mut self, path: &VPath) -> VFSResult<Box<[(VPath, VFile<M>)]>> {
-        self.filesystem.dir_remove(&self.path.join(path))
     }
 }
 
@@ -78,7 +93,7 @@ impl<'a, M: VMetadata, F: VFileSystem<M>> VFileContainer<M, F> for VDirectory<'a
         self.filesystem.meta_write(&self.root().join_into(path))
     }
 
-    fn dir_iter(&self, path: &VPath, recursive: bool) -> VFSResult<Box<dyn Iterator<Item=&VPath> + Send + '_>> {
+    fn dir_iter(&self, path: &VPath, recursive: bool) -> VFSResult<VDirectoryIterator<M, F>> {
         self.filesystem.path_iter(self.root().join_into(path).as_directory_string(), recursive)
     }
 

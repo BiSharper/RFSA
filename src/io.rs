@@ -5,52 +5,42 @@ use std::sync::Arc;
 use crate::{VFileSystem, VMetadata, VPath};
 
 #[derive(Clone, Eq, PartialEq)]
-pub struct VFile<M: VMetadata> {
-    metadata: M,
-    contents: Arc<[u8]>
-}
+pub struct VFile<M: VMetadata> { metadata: M, contents: Arc<[u8]> }
 
 impl<M: VMetadata> VFile<M> {
-    pub fn create(metadata: M, contents: Vec<u8>) -> Self{
-        Self { metadata, contents: Arc::from(contents.into_boxed_slice()) }
-    }
-
+    pub fn create(metadata: M, contents: Arc<[u8]>) -> Self{ Self { metadata, contents } }
     pub fn metadata(&self) -> M { self.metadata.clone() }
-
-
     pub fn contents(&self) -> Arc<[u8]> { self.contents.clone() }
 }
 
-pub struct ReadableVMetadata<M: VMetadata> {
-    metadata: M
-}
+pub struct ReadableVMetadata<M: VMetadata>(M);
 
 impl<M: VMetadata> ReadableVMetadata<M> {
-    pub fn new(metadata: M) -> Self { Self { metadata } }
+    pub fn with(metadata: M) -> Self { Self { 0: metadata } }
 }
 
 impl<M: VMetadata> Deref for ReadableVMetadata<M> {
     type Target = M;
 
-    fn deref(&self) -> &Self::Target { &self.metadata }
+    fn deref(&self) -> &Self::Target { &self.0 }
 }
 
 pub struct ReadableVFile<M: VMetadata> {
-    metadata_reader: ReadableVMetadata<M>,
+    readable_metadata: ReadableVMetadata<M>,
     contents: Arc<[u8]>,
     position: usize
 }
 
 impl<'a, M: VMetadata> ReadableVFile<M>  {
-    pub fn new(metadata_reader: ReadableVMetadata<M>, contents: Arc<[u8]>, position: usize) -> Self {
-        Self { metadata_reader, contents, position }
+    pub fn with(readable_metadata: ReadableVMetadata<M>, contents: Arc<[u8]>, position: usize) -> Self {
+        Self { readable_metadata, contents, position }
     }
 }
 
 impl<M: VMetadata> Deref for ReadableVFile<M> {
     type Target = ReadableVMetadata<M>;
 
-    fn deref(&self) -> &Self::Target { &self.metadata_reader }
+    fn deref(&self) -> &Self::Target { &self.readable_metadata }
 }
 
 impl<M: VMetadata> Read for ReadableVFile<M> {
@@ -82,7 +72,6 @@ impl<M: VMetadata> Seek for ReadableVFile<M> {
     fn stream_position(&mut self) -> std::io::Result<u64> { Ok(self.position as u64) }
 }
 
-
 pub struct WritableVMetadata<'a, M: VMetadata, F: VFileSystem<M>> {
     filesystem: &'a mut F,
     path: VPath,
@@ -90,7 +79,7 @@ pub struct WritableVMetadata<'a, M: VMetadata, F: VFileSystem<M>> {
 }
 
 impl<'a, M: VMetadata, F: VFileSystem<M>> WritableVMetadata<'a, M, F> {
-    pub fn new(filesystem: &'a mut F, path: VPath, metadata: M) -> Self { Self { filesystem, path, metadata } }
+    pub fn with(filesystem: &'a mut F, path: VPath, metadata: M) -> Self { Self { filesystem, path, metadata } }
 }
 
 impl<'a, M: VMetadata, F: VFileSystem<M>> Deref for WritableVMetadata<'a, M, F> {
@@ -104,32 +93,24 @@ impl<'a, M: VMetadata, F: VFileSystem<M>> DerefMut for WritableVMetadata<'a, M, 
 }
 
 pub struct WritableVFile<'a, M: VMetadata, F: VFileSystem<M>> {
-    metadata: WritableVMetadata<'a, M, F>,
-    cursor:   Cursor<Vec<u8>>
+    writable_metadata: WritableVMetadata<'a, M, F>,
+    cursor:            Cursor<Vec<u8>>
 }
 
 impl<'a, M: VMetadata, F: VFileSystem<M>> WritableVFile<'a, M, F>  {
-    pub fn new(metadata: WritableVMetadata<'a, M, F>, contents: Vec<u8>) -> Self {
-        Self { metadata, cursor: Cursor::new(contents), }
+    pub fn with(writable_metadata: WritableVMetadata<'a, M, F>, contents: Vec<u8>) -> Self {
+        Self { writable_metadata, cursor: Cursor::new(contents), }
     }
 }
 
 impl<'a, M: VMetadata, F: VFileSystem<M>> Deref for WritableVFile<'a, M, F> {
     type Target = WritableVMetadata<'a, M, F>;
 
-    fn deref(&self) -> &Self::Target { &self.metadata }
+    fn deref(&self) -> &Self::Target { &self.writable_metadata }
 }
 
 impl<'a, M: VMetadata, F: VFileSystem<M>> DerefMut for WritableVFile<'a, M, F> {
-    fn deref_mut(&mut self) -> &mut Self::Target { &mut self.metadata }
-}
-
-impl<'a, M: VMetadata, F: VFileSystem<M>> AsRef<Cursor<Vec<u8>>> for WritableVFile<'a, M, F> {
-    fn as_ref(&self) -> &Cursor<Vec<u8>> { &self.cursor }
-}
-
-impl<'a, M: VMetadata, F: VFileSystem<M>> AsMut<Cursor<Vec<u8>>> for WritableVFile<'a, M, F> {
-    fn as_mut(&mut self) -> &mut Cursor<Vec<u8>> { &mut self.cursor }
+    fn deref_mut(&mut self) -> &mut Self::Target { &mut self.writable_metadata }
 }
 
 impl<'a, M: VMetadata, F: VFileSystem<M>> Write for WritableVFile<'a, M, F> {
@@ -151,7 +132,8 @@ impl<'a, M: VMetadata, F: VFileSystem<M>> Read for WritableVFile<'a, M, F> {
 impl<'a, M: VMetadata, F: VFileSystem<M>> Drop for WritableVFile<'a, M, F> {
     fn drop(&mut self) {
         let path = self.path.clone();
-        let file = VFile::create(self.metadata.clone(), self.cursor.get_ref().clone());
-        self.filesystem.file_insert(&path, file).unwrap();
+        let contents = self.cursor.get_ref().clone().into_boxed_slice();
+        let file = VFile::create(self.metadata.clone(), Arc::from(contents));
+        self.filesystem.fs_insert(&path, file).unwrap();
     }
 }

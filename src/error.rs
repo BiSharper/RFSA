@@ -1,14 +1,12 @@
-use std::io;
+use std::{io, result};
 use thiserror::Error;
 
-pub type VFSResult<T> = Result<T, VFSError>;
+pub type Result<T> = result::Result<T, Error>;
 
 #[derive(Error, Debug)]
-pub enum VFSError {
+pub enum Error {
     #[error("IO Error")]
     IoError(#[from] io::Error),
     #[error("The specified entry was not found")]
     EntryNotFound,
-    #[error("Filesystem Error Occurred: {0}")]
-    Other(String),
 }

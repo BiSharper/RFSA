@@ -1,7 +1,7 @@
 use std::sync::Arc;
 use crate::{PathLike, ReadableVFile, ReadableVMetadata, VDirectoryIterator, VFile, VFileContainer, VMetadata, VPath, WritableVFile, WritableVMetadata};
 
-pub trait VFileSystem<M: VMetadata>: Sized + Send + Sync + 'static {
+pub trait VFileSystem<M: VMetadata>: Sized + Send + Sync {
     type VPathIterator: Iterator<Item=VPath> + Send;
 
     fn fs_root(&self) -> VPath { VPath::exact("") }

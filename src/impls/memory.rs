@@ -10,10 +10,9 @@ pub struct MemoryFileSystem<M: VMetadata> {
 
 #[allow(dead_code)]
 impl<M: VMetadata> MemoryFileSystem<M> {
+    pub fn new_empty(root: VPath) -> Self { Self::new(root, HashMap::new()) }
 
-    fn new_empty(root: VPath) -> Self { Self::new(root, HashMap::new()) }
-
-    fn new(root: VPath, entries: HashMap<VPath, VFile<M>>) -> Self{
+    pub fn new(root: VPath, entries: HashMap<VPath, VFile<M>>) -> Self{
         Self { entries: RwLock::new(entries), root, }
     }
 }

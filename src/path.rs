@@ -5,8 +5,7 @@ use std::sync::Arc;
 
 pub const SEPARATOR: char = '/';
 
-pub trait PathLike:
-AsRef<str> + Deref<Target = str> + Debug + Sized + Display + Clone + Hash + Eq + PartialEq + Ord + PartialOrd  {
+pub trait PathLike: AsRef<str> + Deref<Target = str> + Debug + Sized + Display + Clone + Hash + Eq + PartialEq + Ord + PartialOrd  {
     fn as_str(&self) -> &str;
 
     fn to_string(&self) -> String;
@@ -46,9 +45,7 @@ AsRef<str> + Deref<Target = str> + Debug + Sized + Display + Clone + Hash + Eq +
 
     fn directory_str_len(&self) -> usize { self.len() + 1 }
 
-    fn as_vpath(&self) -> &VPath;
-
-    fn to_vpath(self) -> VPath { self.as_vpath().clone() }
+    fn to_path<T: PathLike>(self) -> T { T::normalized(self.as_str()) }
 
     fn as_directory_string(&self) -> String { format!("{}{}", self.as_str(), SEPARATOR) }
 
@@ -64,11 +61,7 @@ AsRef<str> + Deref<Target = str> + Debug + Sized + Display + Clone + Hash + Eq +
 
     fn exact(path: &str) -> Self;
 
-    fn normalize(path: &str) -> String {
-        todo!("path = {}", path)
-    }
-
-    fn create(path: &str) -> Self { Self::exact(&*Self::normalize(path)) }
+    fn normalized(path: &str) -> Self;
 }
 
 #[derive(Debug, Clone, Hash, Eq, PartialEq, Ord, PartialOrd)]
@@ -76,12 +69,12 @@ pub struct VPath(Arc<str>);
 
 impl From<String> for VPath {
     fn from(value: String) -> Self {
-        Self::create(&*value)
+        Self::normalized(&*value)
     }
 }
 
 impl From<&str> for VPath {
-    fn from(value: &str) -> Self { Self::create(value) }
+    fn from(value: &str) -> Self { Self::normalized(value) }
 }
 
 impl Deref for VPath {
@@ -103,9 +96,31 @@ impl PathLike for VPath {
 
     fn to_string(&self) -> String { self.0.to_string() }
 
-    fn as_vpath(&self) -> &VPath { self }
-
     fn exact(path: &str) -> Self { Self { 0: Arc::from(path) } }
+
+    fn normalized(path: &str) -> Self {
+        let mut result = Vec::with_capacity(path.len());
+        let mut last_was_separator = true;
+        let mut chars_written = 1;
+        result.push(SEPARATOR);
+        for c in path.chars() {
+            match c {
+                '/' | '\\' => {
+                    if last_was_separator { continue; }
+                    result.push(SEPARATOR);
+                    chars_written += 1;
+                    last_was_separator = true;
+                }
+                _ => {
+                    last_was_separator = false;
+                    result.push(c.to_ascii_lowercase());
+                    chars_written += 1;
+                }
+            }
+        }
+        if chars_written > 0 && result[chars_written - 1] == '\\' { result.pop(); };
+        Self::exact(&*result[..chars_written].iter().collect::<String>())
+    }
 }
 
 

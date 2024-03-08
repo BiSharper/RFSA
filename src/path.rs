@@ -99,27 +99,26 @@ impl PathLike for VPath {
     fn exact(path: &str) -> Self { Self { 0: Arc::from(path) } }
 
     fn normalized(path: &str) -> Self {
-        let mut result = Vec::with_capacity(path.len());
-        let mut last_was_separator = true;
-        let mut chars_written = 1;
+        let mut result: Vec<char> = Vec::with_capacity(path.len());
         result.push(SEPARATOR);
+        let mut last_was_separator = true;
+
         for c in path.chars() {
-            match c {
-                '/' | '\\' => {
-                    if last_was_separator { continue; }
-                    result.push(SEPARATOR);
-                    chars_written += 1;
-                    last_was_separator = true;
-                }
-                _ => {
-                    last_was_separator = false;
-                    result.push(c.to_ascii_lowercase());
-                    chars_written += 1;
-                }
+            if "/\\".contains(c) {
+                if last_was_separator { continue; }
+                result.push(SEPARATOR);
+                last_was_separator = true;
+            } else {
+                result.push(c.to_ascii_lowercase());
+                last_was_separator = false;
             }
         }
-        if chars_written > 0 && result[chars_written - 1] == '\\' { result.pop(); };
-        Self::exact(&*result[..chars_written].iter().collect::<String>())
+
+        if last_was_separator {
+            result.pop();
+        }
+
+        Self::exact(&*String::from_iter(result))
     }
 }
 
